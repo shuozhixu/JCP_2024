@@ -1,0 +1,278 @@
+# An in.script for npt
+# package gpu force/neigh 0 2 1.0g_1_void
+# General parameters
+
+variable	sname index shear
+log		${sname}.log 
+
+variable initTemp equal 1.0
+variable rstrain equal 1e7              #/s
+variable energyConv equal 160.21917     # conversion factor
+
+# ------------------------ INITIALIZATION ----------------------------
+units metal         
+dimension 3          
+boundary p p s 
+
+#processors      6 1 4         
+atom_style       atomic    
+read_data       data.Ag_5nm_2
+
+# define potential
+pair_style      eam/alloy 
+pair_coeff  * * AgCu.eam.alloy Ag Ag
+
+# Define void region (example for 1 nm diameter void)
+variable radius equal 10 # change it to 10 and 15
+variable ypos_interface equal 50.5-${radius}
+variable ypos_center equal 26.75
+
+region void_region sphere 219.797071865 ${ypos_interface} 129.905 ${radius} units box
+group void_group region void_region
+
+# Delete atoms in the void region to create the void
+delete_atoms group void_group
+
+neighbor        2.5  bin
+neigh_modify    delay 10 every 2 check yes one 30000 page 300000
+
+variable output_direc string /ourdisk/hpc/cm3atou/dont_archive/mahshad1994/Ag_2_void_2nm_interface
+
+shell mkdir ${output_direc}
+
+# -------------------------RELAXATION SETTINGS ---------------------------------
+timestep 0.001
+
+#thermo          100
+#thermo_style    custom step cpu etotal pe ke temp press pxx pyy pzz pxy pxz pyz vol density
+
+#dump            1 all custom 50000 dump.*.npt id type x y z vx vy vz fx fy fz
+#dump_modify     1 sort id
+
+#velocity        all create ${initTemp} 99284591 rot yes dist gaussian
+#velocity        all zero linear
+#velocity        all zero angular
+
+#fix             1 all npt temp ${initTemp} ${initTemp} 0.1 x 0.0 0.0 1.0 y 0. 0. 1.
+#run             150000
+
+#unfix     1
+#undump    1
+
+#reset_timestep 0
+
+#store initial position of bottom and top planes along z. ####????
+variable tmp0 equal "zlo+10"
+variable zlo0 equal ${tmp0}
+variable tmp1 equal "zhi-10"
+variable zhi0 equal ${tmp1}
+
+variable tmp2 equal "zlo+50"
+variable zlot equal ${tmp2}
+variable tmp3 equal "zhi-50"
+variable zhit equal ${tmp3}
+                  
+
+region upper block INF INF INF INF ${zhi0} INF units box
+region lower block INF INF INF INF INF ${zlo0} units box   
+region upper2 block INF INF INF INF ${zhit} ${zhi0} units box
+region lower2 block INF INF INF INF ${zlo0} ${zlot} units box 
+
+group  lower region lower
+group  upper region upper
+group  lower2 region lower2
+group  upper2 region upper2
+group  boundary union lower upper lower2 upper2
+group  mobile subtract all boundary 
+
+group one type 1
+group two type 2
+group dmobile intersect mobile one 
+group dfree intersect mobile two   
+
+#change_box      all boundary p p s
+#run 0
+
+compute         pe all pe/atom
+compute         ke all ke/atom
+compute         vor all voronoi/atom
+compute         peratom all stress/atom NULL
+
+variable        Sxx atom -c_peratom[1]/(c_vor[1]*10000+1e-99)                         #GPa          
+variable        Syy atom -c_peratom[2]/(c_vor[1]*10000+1e-99)            
+variable        Szz atom -c_peratom[3]/(c_vor[1]*10000+1e-99)
+variable        Sxy atom -c_peratom[4]/(c_vor[1]*10000+1e-99)
+variable        Sxz atom -c_peratom[5]/(c_vor[1]*10000+1e-99)
+variable        Syz atom -c_peratom[6]/(c_vor[1]*10000+1e-99)
+
+compute         pupper upper reduce sum c_peratom[1] c_peratom[2] c_peratom[3] c_peratom[4] c_peratom[5] c_peratom[6]
+compute         uppervol upper reduce sum c_vor[1]
+
+compute         plower lower reduce sum c_peratom[1] c_peratom[2] c_peratom[3] c_peratom[4] c_peratom[5] c_peratom[6]
+compute         lowervol lower reduce sum c_vor[1]
+
+compute         puppert upper2 reduce sum c_peratom[1] c_peratom[2] c_peratom[3] c_peratom[4] c_peratom[5] c_peratom[6]
+compute         uppertvol upper2 reduce sum c_vor[1]
+
+compute         plowert lower2 reduce sum c_peratom[1] c_peratom[2] c_peratom[3] c_peratom[4] c_peratom[5] c_peratom[6]
+compute         lowertvol lower2 reduce sum c_vor[1]
+
+compute         pmob mobile reduce sum c_peratom[1] c_peratom[2] c_peratom[3] c_peratom[4] c_peratom[5] c_peratom[6]
+compute         mobvol mobile reduce sum c_vor[1]
+
+compute         pdmob dmobile reduce sum c_peratom[1] c_peratom[2] c_peratom[3] c_peratom[4] c_peratom[5] c_peratom[6]
+compute         dmobvol dmobile reduce sum c_vor[1]
+
+compute         pdfre dfree reduce sum c_peratom[1] c_peratom[2] c_peratom[3] c_peratom[4] c_peratom[5] c_peratom[6]
+compute         dfrevol dfree reduce sum c_vor[1]
+
+variable        preu1 equal c_pupper[1]/(c_uppervol*10000)                       #divided by 10000, GPa
+variable        preu2 equal c_pupper[2]/(c_uppervol*10000)
+variable        preu3 equal c_pupper[3]/(c_uppervol*10000)
+variable        preu4 equal c_pupper[4]/(c_uppervol*10000)
+variable        preu5 equal c_pupper[5]/(c_uppervol*10000)
+variable        preu6 equal c_pupper[6]/(c_uppervol*10000)
+
+variable        prel1 equal c_plower[1]/(c_lowervol*10000)                       #divided by 10000, GPa
+variable        prel2 equal c_plower[2]/(c_lowervol*10000)
+variable        prel3 equal c_plower[3]/(c_lowervol*10000)
+variable        prel4 equal c_plower[4]/(c_lowervol*10000)
+variable        prel5 equal c_plower[5]/(c_lowervol*10000)
+variable        prel6 equal c_plower[6]/(c_lowervol*10000)
+
+variable        preut1 equal c_puppert[1]/(c_uppertvol*10000)                       #divided by 10000, GPa
+variable        preut2 equal c_puppert[2]/(c_uppertvol*10000)
+variable        preut3 equal c_puppert[3]/(c_uppertvol*10000)
+variable        preut4 equal c_puppert[4]/(c_uppertvol*10000)
+variable        preut5 equal c_puppert[5]/(c_uppertvol*10000)
+variable        preut6 equal c_puppert[6]/(c_uppertvol*10000)
+
+variable        prelt1 equal c_plowert[1]/(c_lowertvol*10000)                       #divided by 10000, GPa
+variable        prelt2 equal c_plowert[2]/(c_lowertvol*10000)
+variable        prelt3 equal c_plowert[3]/(c_lowertvol*10000)
+variable        prelt4 equal c_plowert[4]/(c_lowertvol*10000)
+variable        prelt5 equal c_plowert[5]/(c_lowertvol*10000)
+variable        prelt6 equal c_plowert[6]/(c_lowertvol*10000)
+
+variable        prem1 equal c_pmob[1]/(c_mobvol*10000)                       #divided by 10000, GPa
+variable        prem2 equal c_pmob[2]/(c_mobvol*10000)
+variable        prem3 equal c_pmob[3]/(c_mobvol*10000)
+variable        prem4 equal c_pmob[4]/(c_mobvol*10000)
+variable        prem5 equal c_pmob[5]/(c_mobvol*10000)
+variable        prem6 equal c_pmob[6]/(c_mobvol*10000)  
+
+variable        predm1 equal c_pdmob[1]/(c_dmobvol*10000)                       #divided by 10000, GPa
+variable        predm2 equal c_pdmob[2]/(c_dmobvol*10000)
+variable        predm3 equal c_pdmob[3]/(c_dmobvol*10000)
+variable        predm4 equal c_pdmob[4]/(c_dmobvol*10000)
+variable        predm5 equal c_pdmob[5]/(c_dmobvol*10000)
+variable        predm6 equal c_pdmob[6]/(c_dmobvol*10000)
+
+variable        predf1 equal c_pdfre[1]/(c_dfrevol*10000)                       #divided by 10000, GPa
+variable        predf2 equal c_pdfre[2]/(c_dfrevol*10000)
+variable        predf3 equal c_pdfre[3]/(c_dfrevol*10000)
+variable        predf4 equal c_pdfre[4]/(c_dfrevol*10000)
+variable        predf5 equal c_pdfre[5]/(c_dfrevol*10000)
+variable        predf6 equal c_pdfre[6]/(c_dfrevol*10000)
+
+variable        tstrain equal ${rstrain}*step*0.001/1e12
+
+# define the force to apply
+variable nupper equal count(upper)
+print "number of atoms in upper == ${nupper}"
+variable nlower equal count(lower)
+print "number of atoms in lower == ${nlower}" 
+
+# store forces
+fix 1 upper store/force
+fix 2 lower store/force
+
+compute ufxc upper reduce ave f_1[1]
+compute lfxc lower reduce ave f_2[1]
+
+variable avg_velocity_up equal vcm(upper,x)
+variable avg_velocity_low equal vcm(lower,x) 
+
+# define the velocity to apply
+variable tmp4 equal lx
+variable LXX equal ${tmp4}
+variable tmp5 equal ly
+variable LYY equal ${tmp5}
+variable tmp6 equal lz
+variable LZZ equal ${tmp6}
+
+variable velo equal ${rstrain}*(${LZZ}-20)/1e12
+variable vel equal ${velo}
+
+variable vx_init_upper equal  v_vel-v_avg_velocity_up
+variable vx_init_lower equal  -v_avg_velocity_low
+
+# define temperature
+compute temp1 mobile temp
+compute temp2 dmobile temp
+compute temp3 lower2 temp
+compute temp4 upper2 temp
+compute temp5 dfree temp
+
+# define velocity on boundary
+velocity upper set v_vx_init_upper 0. 0. sum yes units box
+velocity lower set v_vx_init_lower 0. 0. sum yes units box
+
+# store forces
+variable appforce1 equal -c_ufxc
+variable appforce2 equal -c_lfxc
+
+# define boundary conditions
+fix 3 upper addforce v_appforce1 0.0 0.0
+fix 4 lower addforce v_appforce2 0.0 0.0
+
+fix 5 upper nve
+fix 6 lower nve
+
+fix 7 lower2 nvt temp ${initTemp} ${initTemp} 0.1
+fix_modify 7 temp temp3
+
+fix 8 upper2 nvt temp ${initTemp} ${initTemp} 0.1
+fix_modify 8 temp temp4
+
+# temperature control
+fix 9 mobile nve
+
+variable usigmaxxc equal -c_ufxc*v_nupper*${energyConv}/(${LXX}*${LYY})     #####GPa
+variable lsigmaxxc equal -c_lfxc*v_nlower*${energyConv}/(${LXX}*${LYY})     #####GPa
+variable layerstressc equal -(v_usigmaxxc-v_lsigmaxxc)/2
+
+# calculate displacement and compared strain
+compute udis upper displace/atom
+compute ldis lower displace/atom
+
+compute audis upper reduce ave c_udis[1]
+compute aldis lower reduce ave c_ldis[1]
+
+variable ctstrain equal (c_audis-c_aldis)/(${LZZ}-20)
+variable ttime equal step*0.001             #######ps
+
+######?????
+fix def1 all print 7500 "${ttime} ${ctstrain} ${tstrain} ${preu1} ${preu2} ${preu3} ${preu4} ${preu5} ${preu6}" file ${sname}.upper.txt screen no
+fix def2 all print 7500 "${ttime} ${ctstrain} ${tstrain} ${prel1} ${prel2} ${prel3} ${prel4} ${prel5} ${prel6}" file ${sname}.lower.txt screen no
+fix def3 all print 7500 "${ttime} ${ctstrain} ${tstrain} ${preut1} ${preut2} ${preut3} ${preut4} ${preut5} ${preut6}" file ${sname}.upper2.txt screen no
+fix def4 all print 7500 "${ttime} ${ctstrain} ${tstrain} ${prelt1} ${prelt2} ${prelt3} ${prelt4} ${prelt5} ${prelt6}" file ${sname}.lower2.txt screen no
+fix def5 all print 7500 "${ttime} ${ctstrain} ${tstrain} ${prem1} ${prem2} ${prem3} ${prem4} ${prem5} ${prem6}" file ${sname}.mobile.txt screen no
+fix def6 all print 7500 "${ttime} ${ctstrain} ${tstrain} ${predm1} ${predm2} ${predm3} ${predm4} ${predm5} ${predm6}" file ${sname}.dmobile.txt screen no
+fix def7 all print 7500 "${ttime} ${ctstrain} ${tstrain} ${predf1} ${predf2} ${predf3} ${predf4} ${predf5} ${predf6}" file ${sname}.dfree.txt screen no
+fix def8 all print 7500 "${ttime} ${ctstrain} ${tstrain} ${usigmaxxc}" file ${sname}.fupper.txt screen no
+fix def9 all print 7500 "${ttime} ${ctstrain} ${tstrain} ${lsigmaxxc}" file ${sname}.flower.txt screen no
+fix def10 all print 7500 "${ttime} ${ctstrain} ${tstrain} ${layerstressc}" file ${sname}.layer.txt screen no
+
+thermo 100
+thermo_style custom step cpu etotal pe ke temp c_temp1 c_temp2 c_temp3 c_temp4 c_temp5 press pxx pyy pzz pxy pxz pyz
+
+shell cd ${output_direc}
+
+#####?????
+dump    1 all custom 7500 dump.* id type x y z vx vy vz fx fy fz c_pe c_ke v_Sxx v_Syy v_Szz v_Sxy v_Sxz v_Syz
+dump_modify     1 sort id
+
+run 15000000
+
+print           "All done"
