@@ -1,4 +1,4 @@
-# Confined layer slips
+# Confined layer slips: Irradiation-induced void
 
 ## Foreword
 
@@ -77,9 +77,8 @@ There are two pure metals, Cu and Ag. To provide references, we can simulate the
 
 The dislocation/void interactions in a Cu single crystal where the periodic boundary conditions were applied along the dislocation line were modeled in [a previous paper](http://dx.doi.org/10.1088/1361-651X/ab8358), which should be studied closely.
 
-## References
+## Reference
 
 If you use any files from this GitHub repository, please cite
 
-- Mahshad Fani, Wu-Rong Jian, Yanqing Su, Shuozhi Xu, [Confined layer slip process in nanolaminated Ag and two Ag/Cu nanolaminates](https://doi.org/10.3390/ma17020501), Materials 17 (2024) 501
-- Wu-Rong Jian, Min Zhang, Shuozhi Xu, Irene J. Beyerlein, [Atomistic simulations of dynamics of an edge dislocation and its interaction with a void in copper: A comparative study](http://dx.doi.org/10.1088/1361-651X/ab8358), Modelling Simul. Mater. Sci. Eng. 28 (2020) 045004
+- Mahshad Fani, Luis Cervantes, Anshu Raj, Shuozhi Xu, [Effects of irradiation-induced voids on confined layer slips in metallic nanolaminates](https://doi.org/10.1063/5.0241799), J. Chem. Phys. 161 (2024) 214702
